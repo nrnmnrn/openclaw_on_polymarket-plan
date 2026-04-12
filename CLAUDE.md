@@ -20,6 +20,18 @@
 - 表格一律使用 Markdown 語法
 - **禁止使用 ASCII art**（浪費 token，影響可讀性）
 
+## 主動搜尋行為
+
+當對話中出現下列關鍵詞，且討論內容涉及**版本、政策、定價、新功能、相容性**時，Claude 必須先透過 Composio Tavily MCP 搜尋取得即時資訊，再回答，不得憑記憶猜測：
+
+- OpenClaw、Polyclaw、ClawSec
+- Polymarket、Gamma API、Polymarket USD
+- 百鍊、Qwen（任何模型名稱）
+- Composio、Tavily
+- Anthropic 政策
+
+搜尋前告知：「正在查詢最新資料...」，回答後附 Sources。
+
 ## 每次對話起點
 
 1. 先讀 `CURRENT_SPEC.md`（系統唯一真實來源）

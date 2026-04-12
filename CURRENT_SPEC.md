@@ -79,7 +79,8 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 **Skills 安裝順序**：
 1. `polyclaw`
 2. `claude-code-skill`
-3. `clawsec-suite`（最後安裝，確保前兩者被納入監控）
+3. `composio-tavily`（即時搜尋，詳見 [ADR-005](adr/ADR-005-composio-integration-hub.md)）
+4. `clawsec-suite`（最後安裝，確保前三者被納入監控）
 
 **Polyclaw 配置**：
 
@@ -136,9 +137,10 @@ flowchart TD
 | 阿里雲 SAS | $10-15 |
 | 百鍊 Qwen API | $10-30 |
 | Claude Sonnet API | $20-50 |
-| **總計** | **$40-95** |
+| Composio（Tavily 搜尋中樞） | $0-29 |
+| **總計** | **$40-124** |
 
-預算上限 $200，有充裕空間應對用量波動。
+預算上限 $200，有充裕空間應對用量波動。Composio 免費層 20,000 tool calls/月，超量升級至 $29/月。
 
 ---
 
@@ -177,3 +179,4 @@ flowchart TD
 | [ADR-002](adr/ADR-002-deployment-platform.md) | 部署平台選擇（阿里雲 SAS + systemd） |
 | [ADR-003](adr/ADR-003-secret-management.md) | 私鑰與敏感變數安全管理 |
 | [ADR-004](adr/ADR-004-live-trading-criteria.md) | Paper trading 進入實盤條件 |
+| [ADR-005](adr/ADR-005-composio-integration-hub.md) | Composio 作為工具整合中樞（Tavily 搜尋） |
