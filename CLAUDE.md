@@ -34,7 +34,14 @@
 讀 `docs/research/INDEX.md`；若有「有效」狀態的相關主題，直接引用該研究檔案，告知用戶「引用 `docs/research/<file>.md`（查詢日期 YYYY-MM-DD）」，**不執行 Tavily 搜尋**。
 
 **步驟 2 — cache 無效則搜尋：**
-無相關 cache 或已過期時，執行 Composio Tavily MCP 搜尋。搜尋前告知：「正在查詢最新資料...」，回答後附 Sources。
+無相關 cache 或已過期時，依查詢性質選擇工具：
+
+| 情境 | 工具 |
+|------|------|
+| GitHub 專案的程式碼、文件、releases、issue | **GitMCP** |
+| 其他網路資訊（政策、定價、新聞、非 GitHub 文件） | **Composio Tavily** |
+
+搜尋前告知：「正在查詢最新資料...」，回答後附 Sources。
 
 **步驟 3 — 搜尋後判斷存檔：**
 搜尋結果含具體事實（版本號、價格、政策日期、相容性結論）時，靜默完成：
