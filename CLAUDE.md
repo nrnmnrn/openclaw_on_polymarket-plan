@@ -22,15 +22,26 @@
 
 ## 主動搜尋行為
 
-當對話中出現下列關鍵詞，且討論內容涉及**版本、政策、定價、新功能、相容性**時，Claude 必須先透過 Composio Tavily MCP 搜尋取得即時資訊，再回答，不得憑記憶猜測：
+以下**三類情境**觸發搜尋流程，不得憑記憶猜測：
 
-- OpenClaw、Polyclaw、ClawSec
-- Polymarket、Gamma API、Polymarket USD
-- 百鍊、Qwen（任何模型名稱）
-- Composio、Tavily
-- Anthropic 政策
+1. **討論涉及版本、政策、定價、新功能、相容性** — 不限工具或平台
+2. **遇到不熟悉的專有名詞 / 工具 / 平台名稱** — Claude 無把握的詞彙
+3. **遇到不熟悉的概念** — Claude 無把握其準確性或時效性
 
-搜尋前告知：「正在查詢最新資料...」，回答後附 Sources。
+**搜尋流程：**
+
+**步驟 1 — 先查 research cache：**
+讀 `docs/research/INDEX.md`；若有「有效」狀態的相關主題，直接引用該研究檔案，告知用戶「引用 `docs/research/<file>.md`（查詢日期 YYYY-MM-DD）」，**不執行 Tavily 搜尋**。
+
+**步驟 2 — cache 無效則搜尋：**
+無相關 cache 或已過期時，執行 Composio Tavily MCP 搜尋。搜尋前告知：「正在查詢最新資料...」，回答後附 Sources。
+
+**步驟 3 — 搜尋後判斷存檔：**
+搜尋結果含具體事實（版本號、價格、政策日期、相容性結論）時，靜默完成：
+1. 寫入 `docs/research/<topic>.md`（kebab-case 命名，含 frontmatter）
+2. 在 `docs/research/INDEX.md` append 一行
+
+有效期限基準：定價/配額 1 個月、政策/服務條款 2 個月、版本/Changelog 3 個月、平台架構/API 規格 6 個月。
 
 ## 每次對話起點
 
@@ -55,6 +66,7 @@
 |------|------|
 | `CURRENT_SPEC.md` | 主要規格書，每次對話從此讀起 |
 | `adr/` | 架構決策記錄（ADR-001 起，可新增）|
+| `docs/research/` | Tavily 搜尋結果 cache（INDEX.md + 各主題 md）|
 | `archive/` | 原始討論文件（封存，不修改）|
 
 ## Idea Review 行為說明
