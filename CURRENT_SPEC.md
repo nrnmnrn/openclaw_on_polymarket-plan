@@ -1,13 +1,13 @@
 # TraderClaw — 當前規格書
 
-**最後更新**：2026-04-12  
+**最後更新**：2026-04-14  
 **狀態**：Paper Trading 規劃階段
 
 ---
 
 ## 目標
 
-在阿里雲部署 OpenClaw，以百鍊 Qwen 為主模型、Claude 審核關鍵決策，透過 Polyclaw skill 執行 Polymarket Yes/No spread 套利，目標達成穩定被動收入。
+在阿里雲部署 OpenClaw，以百鍊 Qwen 為主模型、Claude 審核關鍵決策，透過 Polyclaw Hedge Scan 執行 Polymarket 邏輯套利（contrapositive / 數學套利），目標達成穩定被動收入。
 
 ---
 
@@ -17,8 +17,8 @@
 |------|------|
 | Anthropic 政策（2026-04-04 起）| OpenClaw 不能使用 Claude Pro/Max 訂閱額度，必須走獨立 API Key 按量計費 |
 | Polymarket 升級 | 抵押品從 USDC.e 換為 Polymarket USD，Polyclaw 相容性需持續觀察 |
-| 預算上限 | $200/月（運行成本）；$100 初始交易本金 |
-| 本金說明 | $100 × 2-5% 月報酬 = $2-5/月，短期無法打平成本；初期定位為策略驗證 |
+| 預算上限 | $200/月（運行成本）；$150 初始交易本金 |
+| 本金說明 | $150 × 2-5% 月報酬 = $3-7.5/月，短期無法打平成本；初期定位為策略驗證 |
 
 ---
 
@@ -39,11 +39,10 @@ graph TB
 ```
 
 **資料流**：
-1. Qwen 每 60 分鐘透過 Polyclaw 掃描 Polymarket（Gamma API）
-2. 發現套利機會 → Qwen 初步判斷
-3. 高複雜度或高風險交易 → 路由至 Claude Sonnet 4.6 二次審核
-4. 通過審核 → Polyclaw 執行 on-chain 交易（Polygon）
-5. ClawSec 全程監控 SOUL.md 與 skill 完整性
+1. Qwen 每 30 分鐘透過 Polyclaw Hedge Scan 掃描 Polymarket（Gamma API）
+2. 依 Tier 判定：Tier 1（≥95%）Qwen 直接執行；Tier 2（90-95%）路由 Claude 審核；Tier 3 略過
+3. 通過審核 → Polyclaw 執行 on-chain 交易（Polygon）
+4. ClawSec 全程監控 SOUL.md 與 skill 完整性
 
 ---
 
@@ -74,7 +73,10 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 
 **模型路由**（詳見 [ADR-001](adr/ADR-001-model-routing.md)）：
 - 預設模型：`bailian/qwen3.5-plus`
-- 觸發 Claude 審核條件：`hedge`、`arbitrage > $10`、`unusual market`、`error recovery`
+- Tier 1（≥95% coverage）：Qwen 直接執行
+- Tier 2（90–95% coverage）：路由至 Claude Sonnet 4.6 審核
+- Tier 3（< 90%）：略過，僅記錄
+- 其他觸發 Claude：`unusual market`、`error recovery`
 
 **Skills 安裝順序**：
 1. `polyclaw`
@@ -87,8 +89,9 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 | 參數 | 值 |
 |------|-----|
 | mode | `paper`（初始） |
-| scan_interval_minutes | 60 |
-| strategy | `yes_no_spread` |
+| scan_interval_minutes | 30（paper）→ 視報告調整（實盤） |
+| strategy | `hedge_scan` |
+| tier_filter | Tier 1 執行；Tier 2 Claude 審核；Tier 3 略過 |
 | max_position_usdc | 10 |
 | daily_loss_limit_usdc | 5 |
 
@@ -104,14 +107,15 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 
 ```mermaid
 flowchart TD
-    A["每 60 分鐘觸發"] --> B["Qwen via Polyclaw 掃描市場"]
-    B --> C{"Yes+No 總價 < $0.97？<br>(spread > 3%)"}
-    C -->|No| A
-    C -->|Yes| D["Qwen 初步評估<br>流動性、剩餘時間"]
-    D --> E{"複雜度高<br>或金額 > $10？"}
-    E -->|Yes| F["路由至 Claude 二次審核"]
-    E -->|No| G["記錄模擬交易結果"]
-    F --> G
+    A["每 30 分鐘觸發"] --> B["Polyclaw Hedge Scan\n掃描活躍市場"]
+    B --> C{"Tier 判定"}
+    C -->|"Tier 3 &lt; 90%"| D["略過，記錄"]
+    C -->|"Tier 2 90-95%"| E["路由至 Claude Sonnet 4.6 審核"]
+    C -->|"Tier 1 ≥ 95%"| F["Qwen 直接執行模擬交易"]
+    E --> G{"Claude 通過？"}
+    G -->|No| D
+    G -->|Yes| F
+    F --> H["記錄結果\n勝率 / 利潤 / 手續費"]
 ```
 
 ### 進入實盤條件（需同時滿足，詳見 [ADR-004](adr/ADR-004-live-trading-criteria.md)）
@@ -124,7 +128,7 @@ flowchart TD
 
 | 參數 | 值 |
 |------|-----|
-| 單筆上限 | $10（本金 10%）|
+| 單筆上限 | $10（本金 ~7%）|
 | 每日虧損上限 | $5（觸發後當日停止）|
 | 人工審查頻率 | 每週一次 log 檢查 |
 
@@ -158,16 +162,17 @@ flowchart TD
 
 - Polymarket 升級（USDC.e → Polymarket USD）可能造成 Polyclaw 暫時不相容
 - 套利利潤薄，手續費（0.3%-2%）+ 延遲可能吃掉利潤
-- $100 本金短期內無法打平運行成本，需視為策略驗證投資
+- $150 本金短期內無法打平運行成本，需視為策略驗證投資
 
 ---
 
 ## YAGNI（明確不包含）
 
 - Telegram / Discord 通知（驗證期不需要）
-- Binance 自動橋接（$100 本金手動轉入即可）
+- Binance 自動橋接（$150 本金手動轉入即可）
 - 多鏈支援
 - 多策略並行（先驗證一個策略）
+- Liquidity Provision / Market Making（需 $5,000+ 資金，超出簡單使用範圍）
 
 ---
 

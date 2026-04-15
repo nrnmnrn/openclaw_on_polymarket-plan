@@ -21,10 +21,10 @@ Anthropic 自 2026-04-04 起政策調整，OpenClaw 不能再使用 Claude Pro/M
 
 | 觸發條件 | 使用模型 |
 |----------|---------|
-| 例行市場掃描（每小時） | Qwen3.5-Plus |
-| 初步套利評估 | Qwen3.5-Plus |
-| 包含 `hedge` 操作 | Claude Sonnet 4.6 |
-| 套利金額 > $10 | Claude Sonnet 4.6 |
+| 例行市場掃描（每 30 分鐘） | Qwen3.5-Plus |
+| Hedge Scan Tier 1（≥95% coverage） | Qwen3.5-Plus 直接執行 |
+| Hedge Scan Tier 2（90–95% coverage） | Claude Sonnet 4.6 審核後執行 |
+| Hedge Scan Tier 3（< 90% coverage） | 略過，不使用任何模型執行 |
 | 市場異常狀況（`unusual market`） | Claude Sonnet 4.6 |
 | 錯誤恢復（`error recovery`） | Claude Sonnet 4.6 |
 
@@ -48,3 +48,4 @@ Claude Sonnet 4.6 每月預估 $20-50（僅審核關鍵決策）；Qwen3.5-Plus 
 | 日期 | 做了什麼 | 為什麼 |
 |------|---------|--------|
 | 2026-04-12 | 初版建立 | Anthropic 政策變更後重新設計成本架構 |
+| 2026-04-14 | 路由條件改為 Hedge Scan Tier 1/2/3 | 策略從 yes_no_spread 升級為 hedge_scan，Tier 決定執行路徑 |
