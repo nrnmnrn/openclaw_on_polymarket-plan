@@ -62,6 +62,7 @@ graph TB
 ```
 ANTHROPIC_API_KEY       # Claude Sonnet 4.6
 BAILIAN_API_KEY         # 百鍊 Qwen3.5-Plus
+OPENROUTER_API_KEY      # Polyclaw hedge_scan 語義分析（nvidia/nemotron-nano-9b-v2:free）
 POLYCLAW_PRIVATE_KEY    # 專用小額 Polygon 錢包（僅存放交易本金）
 POLYCLAW_RPC_URL        # Chainstack 免費 RPC
 CHAINSTACK_API_KEY      # Polyclaw 需要
@@ -122,6 +123,7 @@ flowchart TD
 
 - Paper trading 連續 2 週勝率 > 55%
 - 平均每筆模擬利潤 > 手續費 2 倍
+- 每筆模擬通過流動性驗證（CLOB 深度足以吸收 unwanted 側賣出，滑價後仍獲利）
 - ClawSec 未報告任何 drift 或安全異常
 
 ### 實盤風控
