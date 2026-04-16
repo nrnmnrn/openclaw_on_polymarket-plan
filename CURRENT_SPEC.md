@@ -1,4 +1,4 @@
-# TraderClaw — 當前規格書
+# 當前規格書
 
 **最後更新**：2026-04-14  
 **狀態**：Paper Trading 規劃階段
@@ -107,7 +107,7 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 
 ```mermaid
 flowchart TD
-    A["每 30 分鐘觸發"] --> B["Polyclaw Hedge Scan\n掃描活躍市場"]
+    A["每 30 分鐘觸發"] --> B["Polyclaw Hedge Scan<br>掃描活躍市場"]
     B --> C{"Tier 判定"}
     C -->|"Tier 3 &lt; 90%"| D["略過，記錄"]
     C -->|"Tier 2 90-95%"| E["路由至 Claude Sonnet 4.6 審核"]
@@ -115,7 +115,7 @@ flowchart TD
     E --> G{"Claude 通過？"}
     G -->|No| D
     G -->|Yes| F
-    F --> H["記錄結果\n勝率 / 利潤 / 手續費"]
+    F --> H["記錄結果<br>勝率 / 利潤 / 手續費"]
 ```
 
 ### 進入實盤條件（需同時滿足，詳見 [ADR-004](adr/ADR-004-live-trading-criteria.md)）

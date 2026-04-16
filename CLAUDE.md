@@ -1,4 +1,4 @@
-# TraderClaw — Claude 工作規範
+# Claude 工作規範
 
 ## 專案性質
 
