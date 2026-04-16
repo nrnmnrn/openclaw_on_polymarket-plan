@@ -112,3 +112,7 @@
 [需決策] 規模可控: 需維護 2 個獨立服務，個人負擔邊界 → 是否接受？
 [建議]   可行性: 依賴 Tavily quota，需確認免費層上限是否足夠
 ```
+
+## Git Operations
+- Always verify git repository is initialized before attempting commits
+- Use `git status` to check repo state before git operations
