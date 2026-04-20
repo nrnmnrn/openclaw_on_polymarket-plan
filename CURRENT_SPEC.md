@@ -1,6 +1,6 @@
 # 當前規格書
 
-**最後更新**：2026-04-14  
+**最後更新**：2026-04-20  
 **狀態**：Paper Trading 規劃階段
 
 ---
@@ -95,6 +95,11 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 | tier_filter | Tier 1 執行；Tier 2 Claude 審核；Tier 3 略過 |
 | max_position_usdc | 10 |
 | daily_loss_limit_usdc | 5 |
+| min_edge_pct | 2-5%（Kelly MIN_EDGE，低於此不執行） |
+| max_fraction | 0.25（Quarter-Kelly，每筆最多壓注 25% Kelly 建議值） |
+| heartbeat_interval_minutes | 15（無事時回傳 HEARTBEAT_OK，不消耗 token） |
+
+Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），paper trading 起即生效。詳見 [ADR-006](adr/ADR-006-position-sizing.md)。
 
 **安全設定**：
 - `sandbox.mode = "all"`
@@ -119,11 +124,20 @@ flowchart TD
     F --> H["記錄結果<br>勝率 / 利潤 / 手續費"]
 ```
 
+### NegRisk 市場支援
+
+NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果）。Polyclaw 對 NegRisk 的支援分兩層：
+
+- **識別層**：hedge_scan 將市場列表傳給 LLM（IMPLICATION_PROMPT），LLM 自然識別互斥結果間的邏輯必然性，無需專屬掃描選項
+- **執行層**：`lib/contracts.py` 已定義 `NEG_RISK_CTF_EXCHANGE` 與 `NEG_RISK_ADAPTER` 合約地址；`lib/wallet_manager.py` 授權檢查已涵蓋 NegRisk 合約
+
+可選：以 `--query "election"` 等關鍵字縮小掃描範圍，集中在特定事件類型。
+
 ### 進入實盤條件（需同時滿足，詳見 [ADR-004](adr/ADR-004-live-trading-criteria.md)）
 
 - Paper trading 連續 2 週勝率 > 55%
 - 平均每筆模擬利潤 > 手續費 2 倍
-- 每筆模擬通過流動性驗證（CLOB 深度足以吸收 unwanted 側賣出，滑價後仍獲利）
+- 每筆模擬通過 Leg Risk 驗證：`budget ≤ min(YES側訂單簿深度, NO側訂單簿深度)`，滑價後仍符合最低獲利門檻
 - ClawSec 未報告任何 drift 或安全異常
 
 ### 實盤風控
@@ -138,15 +152,29 @@ flowchart TD
 
 ## 成本預估
 
+### Paper Trading 階段（Chainstack Developer 免費方案）
+
 | 項目 | 每月估算 |
 |------|---------|
 | 阿里雲 SAS | $10-15 |
 | 百鍊 Qwen API | $10-30 |
 | Claude Sonnet API | $20-50 |
 | Composio（Tavily 搜尋中樞） | $0-29 |
+| Chainstack（Developer 免費） | $0 |
 | **總計** | **$40-124** |
 
-預算上限 $200，有充裕空間應對用量波動。Composio 免費層 20,000 tool calls/月，超量升級至 $29/月。
+### 實盤階段（Chainstack Growth $49/月）
+
+| 項目 | 每月估算 |
+|------|---------|
+| 阿里雲 SAS | $10-15 |
+| 百鍊 Qwen API | $10-30 |
+| Claude Sonnet API | $20-50 |
+| Composio（Tavily 搜尋中樞） | $0-29 |
+| Chainstack Growth | $49 |
+| **總計** | **$89-173** |
+
+預算上限 $200，兩情境均有空間應對用量波動。Chainstack 升級時機：paper trading 驗證穩定後，進入實盤前切換。Composio 免費層 20,000 tool calls/月，超量升級至 $29/月。
 
 ---
 
@@ -165,6 +193,15 @@ flowchart TD
 - Polymarket 升級（USDC.e → Polymarket USD）可能造成 Polyclaw 暫時不相容
 - 套利利潤薄，手續費（0.3%-2%）+ 延遲可能吃掉利潤
 - $150 本金短期內無法打平運行成本，需視為策略驗證投資
+- UMA oracle 治理操控風險：Polymarket 使用 UMA 作為爭議解決機制，治理攻擊（如 2025-03 烏克蘭礦產案例）可能導致結果偏離市場預期。跨平台套利需 >$0.15 spread buffer，單一平台邏輯套利風險較低
+- Leg Risk：hedge_scan 的兩腿（YES / NO）須同步執行；若一腿成交、另一腿失敗，將形成單邊曝險。Polyclaw 以 sub-5s 異步提交緩解，仍需於 log 中監控
+
+---
+
+## 待解決事項
+
+- [ ] `[2026-04-20]` `[deferred]` — Embedding 市場去重（Chroma + 0.8 similarity threshold）：高頻掃描下可能重複觸發同一市場，尚未有去重機制；影響 Tier 統計準確性
+- [ ] `[2026-04-20]` `[detail-incomplete]` — Kelly Python calc 在 polyclaw 中的觸發點尚未確認（SKILL.md 指令觸發 vs. polyclaw 內建函式調用）；影響移交實作時的分工
 
 ---
 
@@ -187,3 +224,4 @@ flowchart TD
 | [ADR-003](adr/ADR-003-secret-management.md) | 私鑰與敏感變數安全管理 |
 | [ADR-004](adr/ADR-004-live-trading-criteria.md) | Paper trading 進入實盤條件 |
 | [ADR-005](adr/ADR-005-composio-integration-hub.md) | Composio 作為工具整合中樞（Tavily 搜尋） |
+| [ADR-006](adr/ADR-006-position-sizing.md) | 倉位大小策略（Quarter-Kelly Python 計算） |
