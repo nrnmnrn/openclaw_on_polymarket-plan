@@ -21,6 +21,7 @@
 | 結算偵測 | 獨立 cron job | 與 hedge_scan 解耦 |
 | 檢查頻率 | 每日一次（UTC 00:00） | 省資源，延遲影響小 |
 | 實作方式 | Polyclaw 原生整合 | 邏輯內聚，複用現有 Gamma API |
+| 數學計算 | Python 確定性計算 | 所有財務運算（Kelly、P&L、結算）由 Python 執行，LLM 不參與計算 |
 
 ---
 
