@@ -75,6 +75,7 @@
 | `adr/` | 架構決策記錄（ADR-001 起，可新增）|
 | `docs/research/` | Tavily 搜尋結果 cache（INDEX.md + 各主題 md）|
 | `archive/` | 原始討論文件（封存，不修改）|
+| `polyclaw/` | OpenClaw 原始碼參考（唯讀，不修改）|
 
 ## Idea Review 行為說明
 
@@ -113,6 +114,4 @@
 [建議]   可行性: 依賴 Tavily quota，需確認免費層上限是否足夠
 ```
 
-## Git Operations
-- Always verify git repository is initialized before attempting commits
-- Use `git status` to check repo state before git operations
+註: 你執行完的結果最後都會由 Codex 驗證一遍其正確以及可行性
