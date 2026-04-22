@@ -1,6 +1,6 @@
 # 當前規格書
 
-**最後更新**：2026-04-20  
+**最後更新**：2026-04-21  
 **狀態**：Paper Trading 規劃階段
 
 ---
@@ -95,11 +95,11 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 | tier_filter | Tier 1 執行；Tier 2 Claude 審核；Tier 3 略過 |
 | max_position_usdc | 10 |
 | daily_loss_limit_usdc | 5 |
-| min_edge_pct | 2-5%（Kelly MIN_EDGE，低於此不執行） |
+| min_edge_pct | 5%（Kelly MIN_EDGE，低於此不執行） |
 | max_fraction | 0.25（Quarter-Kelly，每筆最多壓注 25% Kelly 建議值） |
 | heartbeat_interval_minutes | 15（無事時回傳 HEARTBEAT_OK，不消耗 token） |
 
-Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），paper trading 起即生效。詳見 [ADR-006](adr/ADR-006-position-sizing.md)。
+Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），整合於 `hedge scan` 輸出。bankroll 動態讀取：paper trading 從 `state/bankroll.json`，live trading 從錢包餘額。詳見 [ADR-006](adr/ADR-006-position-sizing.md)。
 
 **安全設定**：
 - `sandbox.mode = "all"`
@@ -123,6 +123,45 @@ flowchart TD
     G -->|Yes| F
     F --> H["記錄結果<br>勝率 / 利潤 / 手續費"]
 ```
+
+### Bankroll 與結算機制
+
+**適用範圍**：僅 Paper Trading 階段（實盤改讀錢包餘額）
+
+**`state/bankroll.json` 結構**：
+```json
+{
+  "balance_usd": 150.00,
+  "reserved_usd": 0.00,
+  "open_positions": []
+}
+```
+- `balance_usd`：可用餘額
+- `reserved_usd`：已部署資金（尚未結算）
+- `open_positions`：未結倉位陣列（含 market_id、amount、entry_time 等）
+
+**入場更新邏輯**（hedge_scan 執行後）：
+1. 計算 `position_cost`（兩腿成本總和）
+2. `balance_usd -= position_cost`
+3. `reserved_usd += position_cost`
+4. 新增 position 至 `open_positions`
+
+**settle-check 每日結算流程**（UTC 00:00 cron）：
+
+```mermaid
+flowchart TD
+    A["每日 UTC 00:00"] --> B["讀取 open_positions"]
+    B --> C{"有未結倉位？"}
+    C -->|No| D["HEARTBEAT_OK"]
+    C -->|Yes| E["查詢各 market 結算狀態"]
+    E --> F{"已結算？"}
+    F -->|No| D
+    F -->|Yes| G["計算 P&L<br>更新 balance_usd<br>減少 reserved_usd<br>移除 position"]
+    G --> H["記錄結算結果"]
+    H --> D
+```
+
+詳細設計見 [Bankroll Update Mechanism Design](docs/specs/2026-04-21-bankroll-update-mechanism-design.md)。
 
 ### NegRisk 市場支援
 
@@ -201,7 +240,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 ## 待解決事項
 
 - [ ] `[2026-04-20]` `[deferred]` — Embedding 市場去重（Chroma + 0.8 similarity threshold）：高頻掃描下可能重複觸發同一市場，尚未有去重機制；影響 Tier 統計準確性
-- [ ] `[2026-04-20]` `[detail-incomplete]` — Kelly Python calc 在 polyclaw 中的觸發點尚未確認（SKILL.md 指令觸發 vs. polyclaw 內建函式調用）；影響移交實作時的分工
+- [x] `[2026-04-20]` `[resolved 2026-04-21]` — Kelly Python calc 整合於 `hedge scan` 輸出，無需獨立 CLI；bankroll 動態讀取（paper: state file, live: wallet balance）；詳見 ADR-006
 
 ---
 
