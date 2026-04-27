@@ -13,7 +13,7 @@
 
 ## 背景
 
-Anthropic 自 2026-04-04 起政策調整，OpenClaw 不能再使用 Claude Pro/Max 訂閱額度，所有 Claude 呼叫必須走獨立 API Key 按量計費。若全程使用 Claude，每月 API 費用將顯著超過預算。
+Anthropic 自 2026-04-04 起政策調整，所有 Claude 呼叫必須走獨立 API Key 按量計費，不能使用 Claude Pro/Max 訂閱額度。若全程使用 Claude，每月 API 費用將顯著超過預算。本路由策略適用於 Hermes Agent 框架（見 [ADR-007](ADR-007-agent-framework.md)），邏輯不因框架替換而變動。
 
 ---
 

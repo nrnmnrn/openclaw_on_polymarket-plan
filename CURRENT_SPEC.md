@@ -1,13 +1,13 @@
 # 當前規格書
 
-**最後更新**：2026-04-21  
+**最後更新**：2026-04-27  
 **狀態**：Paper Trading 規劃階段
 
 ---
 
 ## 目標
 
-在阿里雲部署 OpenClaw，以百鍊 Qwen 為主模型、Claude 審核關鍵決策，透過 Polyclaw Hedge Scan 執行 Polymarket 邏輯套利（contrapositive / 數學套利），目標達成穩定被動收入。
+在 Alibaba Cloud 部署 Hermes Agent，以百鍊 Qwen 為主模型、Claude 審核關鍵決策，透過 Polyclaw Hedge Scan 執行 Polymarket 邏輯套利（contrapositive / 數學套利），目標達成穩定被動收入。
 
 ---
 
@@ -15,7 +15,7 @@
 
 | 限制 | 說明 |
 |------|------|
-| Anthropic 政策（2026-04-04 起）| OpenClaw 不能使用 Claude Pro/Max 訂閱額度，必須走獨立 API Key 按量計費 |
+| Anthropic 政策（2026-04-04 起）| Hermes Agent 調用 Claude 時，必須走獨立 Anthropic API Key 按量計費，不能使用 Claude Pro/Max 訂閱額度 |
 | Polymarket 升級 | 抵押品從 USDC.e 換為 Polymarket USD，Polyclaw 相容性需持續觀察 |
 | 預算上限 | $200/月（運行成本）；$150 初始交易本金 |
 | 本金說明 | $150 × 2-5% 月報酬 = $3-7.5/月，短期無法打平成本；初期定位為策略驗證 |
@@ -26,23 +26,24 @@
 
 ```mermaid
 graph TB
-    subgraph 阿里雲SAS["阿里雲 SAS（2核 4G RAM）"]
-        subgraph OC["OpenClaw"]
+    subgraph AlibabaSAS["Alibaba Cloud SAS"]
+        subgraph HA["Hermes Agent"]
             Router["模型路由<br/>Qwen3.5-Plus（主）<br/>Claude Sonnet 4.6（關鍵決策）"]
             Skills["Skills<br/>Polyclaw<br/>Claude Code Skill"]
-            ClawSec["ClawSec 安全層<br/>soul-guardian / drift 偵測<br/>prompt injection 掃描<br/>skill SHA256 驗證"]
         end
+        Guardian["hermes-attestation-guardian<br/>（外部 Node.js CLI）<br/>drift 偵測 / advisory 驗證"]
+        Guardian -->|"讀取/寫入 attestation files"| HA
     end
 
-    OC -->|Gamma API 掃描| Polymarket["Polymarket<br/>(Polygon / USDC.e)"]
-    OC -->|高複雜度審核| Anthropic["Anthropic API<br/>Claude Sonnet 4.6"]
+    HA -->|Gamma API 掃描| Polymarket["Polymarket<br/>(Polygon / USDC.e)"]
+    HA -->|高複雜度審核| Anthropic["Anthropic API<br/>Claude Sonnet 4.6"]
 ```
 
 **資料流**：
 1. Qwen 每 30 分鐘透過 Polyclaw Hedge Scan 掃描 Polymarket（Gamma API）
 2. 依 Tier 判定：Tier 1（≥95%）Qwen 直接執行；Tier 2（90-95%）路由 Claude 審核；Tier 3 略過
 3. 通過審核 → Polyclaw 執行 on-chain 交易（Polygon）
-4. ClawSec 全程監控 SOUL.md 與 skill 完整性
+4. hermes-attestation-guardian 外部監控 Hermes 環境完整性（attestation 驗證、config drift 偵測）
 
 ---
 
@@ -50,12 +51,12 @@ graph TB
 
 | 項目 | 規格 |
 |------|------|
-| 主機 | 阿里雲 SAS 2核 4G RAM |
+| 主機 | Alibaba Cloud SAS（執行個體類型待定，詳見待解決事項）|
 | OS | Ubuntu 22.04 LTS |
-| 部署方式 | 阿里雲官方 OpenClaw 一鍵鏡像 |
+| 部署方式 | Alibaba Cloud 官方 Hermes Agent 鏡像 |
 | 儲存 | 20GB SSD |
 | 網路 | 443 開放，SSH 透過 Tailscale，不暴露公網 |
-| 啟動方式 | systemd daemon，自動重啟 |
+| 啟動方式 | systemd daemon（自動重啟）；排程由 Hermes 內建管理 |
 
 **環境變數**（透過 systemd `EnvironmentFile` 載入，檔案 `chmod 600`）：
 
@@ -70,7 +71,7 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 
 ---
 
-## OpenClaw 配置摘要
+## Hermes 配置摘要
 
 **模型路由**（詳見 [ADR-001](adr/ADR-001-model-routing.md)）：
 - 預設模型：`bailian/qwen3.5-plus`
@@ -80,10 +81,10 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 - 其他觸發 Claude：`unusual market`、`error recovery`
 
 **Skills 安裝順序**：
-1. `polyclaw`
-2. `claude-code-skill`
+1. `polyclaw`（`~/.hermes/skills/polyclaw/`，uv 管理依賴）
+2. `claude-code-skill`（待確認 Hermes 環境等效方案，詳見待解決事項）
 3. `composio-tavily`（即時搜尋，詳見 [ADR-005](adr/ADR-005-composio-integration-hub.md)）
-4. `clawsec-suite`（最後安裝，確保前三者被納入監控）
+4. `hermes-attestation-guardian`（外部 Node.js CLI，獨立安裝，監控 Hermes 環境）
 
 **Polyclaw 配置**：
 
@@ -102,8 +103,7 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），整合於 `hedge scan` 輸出。bankroll 動態讀取：paper trading 從 `state/bankroll.json`，live trading 從錢包餘額。詳見 [ADR-006](adr/ADR-006-position-sizing.md)。
 
 **安全設定**：
-- `sandbox.mode = "all"`
-- 高風險工具（exec、fs、trade）：paper trading 期間 `ask: always`，實盤後改 `allow`
+- Hermes command allowlist：高風險工具（exec、fs、trade）paper trading 期間設為 `ask: always`，實盤後改 `allow`
 
 ---
 
@@ -177,12 +177,12 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 - Paper trading 連續 2 週勝率 > 55%
 - 平均每筆模擬利潤 > 手續費 2 倍
 - 每筆模擬通過 Leg Risk 驗證：`budget ≤ min(YES側訂單簿深度, NO側訂單簿深度)`，滑價後仍符合最低獲利門檻
-- ClawSec 未報告任何 drift 或安全異常
+- hermes-attestation-guardian 未報告任何 drift 或安全異常
 
 ### 實盤風控
 
 | 參數 | 值 |
-|------|-----|
+|------|------|
 | 單筆上限 | $10（本金 ~7%）|
 | 每日虧損上限 | $5（觸發後當日停止）|
 | 人工審查頻率 | 每週一次 log 檢查 |
@@ -195,7 +195,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 
 | 項目 | 每月估算 |
 |------|---------|
-| 阿里雲 SAS | $10-15 |
+| Alibaba Cloud SAS | $10-15 |
 | 百鍊 Qwen API | $10-30 |
 | Claude Sonnet API | $20-50 |
 | Composio（Tavily 搜尋中樞） | $0-29 |
@@ -206,7 +206,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 
 | 項目 | 每月估算 |
 |------|---------|
-| 阿里雲 SAS | $10-15 |
+| Alibaba Cloud SAS | $10-15 |
 | 百鍊 Qwen API | $10-30 |
 | Claude Sonnet API | $20-50 |
 | Composio（Tavily 搜尋中樞） | $0-29 |
@@ -241,6 +241,8 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 
 - [ ] `[2026-04-20]` `[deferred]` — Embedding 市場去重（Chroma + 0.8 similarity threshold）：高頻掃描下可能重複觸發同一市場，尚未有去重機制；影響 Tier 統計準確性
 - [x] `[2026-04-20]` `[resolved 2026-04-21]` — Kelly Python calc 整合於 `hedge scan` 輸出，無需獨立 CLI；bankroll 動態讀取（paper: state file, live: wallet balance）；詳見 ADR-006
+- [ ] `[2026-04-27]` `[deferred]` — Alibaba Cloud SAS 執行個體類型（通用型 / 國際型 / CPU最佳化型 / 容量型）選擇，影響 ADR-002 規格表
+- [ ] `[2026-04-27]` `[deferred]` — `claude-code-skill` 在 Hermes 環境下的等效方案待確認（原為 OpenClaw 專屬 skill）
 
 ---
 
@@ -259,8 +261,9 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 | ADR | 決策主題 |
 |-----|---------|
 | [ADR-001](adr/ADR-001-model-routing.md) | 混合模型路由策略（Qwen 主 + Claude 審核） |
-| [ADR-002](adr/ADR-002-deployment-platform.md) | 部署平台選擇（阿里雲 SAS + systemd） |
+| [ADR-002](adr/ADR-002-deployment-platform.md) | 部署平台選擇（Alibaba Cloud SAS + Hermes Agent） |
 | [ADR-003](adr/ADR-003-secret-management.md) | 私鑰與敏感變數安全管理 |
 | [ADR-004](adr/ADR-004-live-trading-criteria.md) | Paper trading 進入實盤條件 |
 | [ADR-005](adr/ADR-005-composio-integration-hub.md) | Composio 作為工具整合中樞（Tavily 搜尋） |
 | [ADR-006](adr/ADR-006-position-sizing.md) | 倉位大小策略（Quarter-Kelly Python 計算） |
+| [ADR-007](adr/ADR-007-agent-framework.md) | Agent 框架選擇（Hermes Agent 取代 OpenClaw） |
