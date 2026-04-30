@@ -20,7 +20,7 @@ date: 2026-04-27
 | 選項 | 優點 | 缺點 |
 |------|------|------|
 | OpenClaw（Claude Code CLI，原始計畫）| Anthropic 官方維護；polyclaw 原為 OpenClaw skill；clawsec-suite 與 runtime 深度整合（auto-restore、prompt injection 掃描）| 阿里雲（China mainland）平台；clawsec-suite 為 Node.js，遷移至其他環境需重建；無內建排程，需維護 systemd cron |
-| Hermes Agent（Nous Research，採用）| Alibaba Cloud 官方一鍵鏡像；內建排程；子代理委派支援混合模型路由；hermes-attestation-guardian 架構清晰（外部 CLI，不與 runtime 耦合）| clawsec-suite auto-restore 無等效替代；claude-code-skill 等效方案待確認 |
+| Hermes Agent（Nous Research，採用）| Alibaba Cloud 官方一鍵鏡像；內建排程；子代理委派支援混合模型路由；hermes-attestation-guardian 架構清晰（外部 CLI，不與 runtime 耦合）| clawsec-suite auto-restore 無等效替代（改由 git 手動還原）；claude-code-skill 等效方案已確認為原生 delegate_task（官方 claude-code skill 用於編程任務，非本專案路由需求，排除）|
 
 ## Consequences
 
@@ -32,7 +32,7 @@ date: 2026-04-27
 
 ### 負面 / 取捨
 - clawsec-suite 的 auto-restore（soul-guardian）功能無對應替代，改由 git 手動還原流程處理（detect → 人工調查 → `git reset --hard`）
-- `claude-code-skill` 需確認 Hermes 環境等效方案（詳見 CURRENT_SPEC.md 待解決事項）
+- `claude-code-skill`：已解決。Tier 2 Claude Sonnet 路由由 Hermes 原生 `delegate_task` 實現（`delegation.model: anthropic/claude-sonnet-4-6`），無需安裝額外 skill；官方 `claude-code` skill（編程任務用）不符本專案需求，排除
 - Alibaba Cloud SAS 執行個體類型尚未確定（詳見 ADR-002）
 
 ## Revision Log
@@ -40,3 +40,4 @@ date: 2026-04-27
 | Date | Change |
 |------|--------|
 | 2026-04-27 | 初版建立，記錄 OpenClaw → Hermes Agent 框架替換決策 |
+| 2026-04-30 | 確認 claude-code-skill 等效方案（delegate_task），更新 Consequences 與 Options Considered |

@@ -1,6 +1,6 @@
 # 當前規格書
 
-**最後更新**：2026-04-28  
+**最後更新**：2026-04-30  
 **狀態**：Paper Trading 規劃階段
 
 ---
@@ -29,7 +29,7 @@ graph TB
     subgraph AlibabaSAS["Alibaba Cloud SAS"]
         subgraph HA["Hermes Agent"]
             Router["模型路由<br/>Qwen3.5-Plus（主）<br/>Claude Sonnet 4.6（關鍵決策）"]
-            Skills["Skills<br/>Polyclaw<br/>Claude Code Skill"]
+            Skills["Skills<br/>Polyclaw<br/>Composio-Tavily"]
         end
         Guardian["hermes-attestation-guardian<br/>（外部 Node.js CLI）<br/>drift 偵測 / advisory 驗證"]
         Guardian -->|"讀取/寫入 attestation files"| HA
@@ -82,9 +82,16 @@ CHAINSTACK_API_KEY      # Polyclaw 需要
 
 **Skills 安裝順序**：
 1. `polyclaw`（`~/.hermes/skills/polyclaw/`，uv 管理依賴）
-2. `claude-code-skill`（待確認 Hermes 環境等效方案，詳見待解決事項）
-3. `composio-tavily`（即時搜尋，詳見 [ADR-005](adr/ADR-005-composio-integration-hub.md)）
-4. `hermes-attestation-guardian`（外部 Node.js CLI，獨立安裝，監控 Hermes 環境）
+2. `composio-tavily`（即時搜尋，詳見 [ADR-005](adr/ADR-005-composio-integration-hub.md)）
+3. `hermes-attestation-guardian`（外部 Node.js CLI，獨立安裝，監控 Hermes 環境）
+
+**Tier 2 Claude Sonnet 路由**：由 Hermes 原生 `delegate_task` 工具實現，無需安裝獨立 skill。設定於 `~/.hermes/config.yaml`：
+
+```yaml
+delegation:
+  model: "anthropic/claude-sonnet-4-6"
+  provider: "anthropic"
+```
 
 **Polyclaw 配置**：
 
@@ -242,7 +249,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 - [ ] `[2026-04-20]` `[deferred]` — Embedding 市場去重（Chroma + 0.8 similarity threshold）：高頻掃描下可能重複觸發同一市場，尚未有去重機制；影響 Tier 統計準確性
 - [x] `[2026-04-20]` `[resolved 2026-04-21]` — Kelly Python calc 整合於 `hedge scan` 輸出，無需獨立 CLI；bankroll 動態讀取（paper: state file, live: wallet balance）；詳見 ADR-006
 - [x] `[2026-04-27]` `[resolved 2026-04-28]` — Alibaba Cloud SAS 執行個體類型確定為通用型 swas.s.c2m4s50b1.linux（2c/4G），地域英國或德國；詳見 ADR-002
-- [ ] `[2026-04-27]` `[deferred]` — `claude-code-skill` 在 Hermes 環境下的等效方案待確認（原為 OpenClaw 專屬 skill）
+- [x] `[2026-04-27]` `[resolved 2026-04-30]` — `claude-code-skill` 等效方案確認：Tier 2 Claude Sonnet 路由由 Hermes 原生 `delegate_task` 處理（`~/.hermes/config.yaml` → `delegation.model: anthropic/claude-sonnet-4-6, provider: anthropic`）；官方 `claude-code` skill 存在但用於編程任務，非本專案所需；詳見 ADR-007
 
 ---
 

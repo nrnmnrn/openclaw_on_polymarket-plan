@@ -28,12 +28,22 @@ Anthropic 自 2026-04-04 起政策調整，所有 Claude 呼叫必須走獨立 A
 | 市場異常狀況（`unusual market`） | Claude Sonnet 4.6 |
 | 錯誤恢復（`error recovery`） | Claude Sonnet 4.6 |
 
+**Tier 2 實作**：透過 Hermes 原生 `delegate_task` 工具，設定 `~/.hermes/config.yaml`：
+
+```yaml
+delegation:
+  model: "anthropic/claude-sonnet-4-6"
+  provider: "anthropic"
+```
+
+子代理以獨立 context 執行推理，僅回傳結論給主代理（Qwen）。
+
 ---
 
 ## 被拒絕的替代方案
 
 - **全程 Claude**：成本過高，每月估算超出 $200 預算，且多數掃描為例行工作無需頂級模型。
-- **全程 Qwen**：無法在高風險決策時提供足夠的推理品質，且無法利用 Claude 的 Claude Code Skill 能力。
+- **全程 Qwen**：無法在高風險決策時提供足夠的推理品質。
 
 ---
 
@@ -49,3 +59,4 @@ Claude Sonnet 4.6 每月預估 $20-50（僅審核關鍵決策）；Qwen3.5-Plus 
 |------|---------|--------|
 | 2026-04-12 | 初版建立 | Anthropic 政策變更後重新設計成本架構 |
 | 2026-04-14 | 路由條件改為 Hedge Scan Tier 1/2/3 | 策略從 yes_no_spread 升級為 hedge_scan，Tier 決定執行路徑 |
+| 2026-04-30 | 補充 Tier 2 的 delegate_task 實作細節；移除過時的 OpenClaw claude-code-skill 參照 | 確認 Hermes 等效方案後同步更新 |
