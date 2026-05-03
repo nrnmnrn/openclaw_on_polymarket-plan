@@ -11,7 +11,7 @@ date: 2026-04-27
 
 ## Decision
 
-使用 Alibaba Cloud（國際版）SAS，透過 Alibaba Cloud 官方 Hermes Agent 一鍵鏡像部署。systemd daemon 負責服務自動重啟，排程（30 分鐘 hedge scan 及每日結算）由 Hermes 內建排程管理。SSH 存取透過 Tailscale，不暴露公網 IP。執行個體類型選為通用型 swas.s.c2m4s50b1.linux（2 vCPU / 4 GiB），部署地域為英國（倫敦）或德國（法蘭克福），以最小化與 Polymarket 匹配引擎的 RTT。Polymarket CLOB 引擎部署於 AWS 愛爾蘭（eu-west-1），英國/德國物理距離最近。通用型 BGP（中國優化）線路同時降低調用百鍊 Qwen API 的延遲，形成雙贏。
+使用 Alibaba Cloud（國際版）SAS，透過 Alibaba Cloud 官方 Hermes Agent 一鍵鏡像部署。systemd daemon 負責服務自動重啟，排程（30 分鐘 hedge scan 及每日結算）由 Hermes 內建排程管理。SSH 存取透過 Tailscale，不暴露公網 IP。Hermes 以 gateway 模式運行（Telegram adapter 啟用），透過 `send_message` 工具支援通知功能（見 [ADR-009](ADR-009-telegram-notifications.md)）。執行個體類型選為通用型 swas.s.c2m4s50b1.linux（2 vCPU / 4 GiB），部署地域為英國（倫敦）或德國（法蘭克福），以最小化與 Polymarket 匹配引擎的 RTT。Polymarket CLOB 引擎部署於 AWS 愛爾蘭（eu-west-1），英國/德國物理距離最近。通用型 BGP（中國優化）線路同時降低調用百鍊 Qwen API 的延遲，形成雙贏。
 
 ## Options Considered
 
@@ -54,7 +54,7 @@ date: 2026-04-27
 | 作業系統 | Ubuntu 22.04 LTS |
 | 儲存 | 50 GiB SSD（swas.s.c2m4s50b1 規格附帶）|
 | 部署方式 | Alibaba Cloud 官方 Hermes Agent 鏡像 |
-| 服務管理 | systemd（自動重啟）；排程由 Hermes 內建管理 |
+| 服務管理 | systemd（自動重啟）；以 **gateway 模式**運行（Telegram adapter 啟用）；排程由 Hermes 內建管理 |
 | 網路存取 | 443 開放；SSH 透過 Tailscale |
 | 每月成本 | $10-15（估算，需於 Alibaba Cloud 控制台確認最終定價）|
 
@@ -70,6 +70,7 @@ date: 2026-04-27
 ### 負面 / 取捨
 - 平台從阿里雲切換為 Alibaba Cloud 國際版，需重新設置帳號與計費
 - 每月成本仍需於 Alibaba Cloud 控制台確認最終定價
+- Hermes 以 gateway 模式運行，systemd unit 配置較純 CLI 模式稍複雜；gateway 模式具體啟動指令待確認（見 ADR-009）
 
 ## Revision Log
 
@@ -78,3 +79,4 @@ date: 2026-04-27
 | 2026-04-12 | 初版建立 | 確立個人可維運、低成本的部署方式（阿里雲 + OpenClaw） |
 | 2026-04-27 | 更新平台至 Alibaba Cloud 國際版 + Hermes Agent 鏡像；補齊 ADR 標準結構 | 框架替換為 Hermes Agent（ADR-007），平台需同步更新 |
 | 2026-04-28 | 確定執行個體類型為通用型 swas.s.c2m4s50b1.linux（2c/4G），部署地域英國或德國；補充各規格族排除原因與地域選型分析 | Polymarket CLOB 引擎在 AWS 愛爾蘭，歐洲地域可降低 RTT 150-200ms；4 GiB 防止 OOM |
+| 2026-05-03 | 補充 Hermes 以 gateway 模式運行的說明 | 導入 Telegram 通知（ADR-009）需要 gateway 模式；更新服務管理描述 |
