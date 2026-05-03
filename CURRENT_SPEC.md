@@ -40,7 +40,7 @@ graph TB
 ```
 
 **資料流**：
-1. Qwen 每 30 分鐘透過 Polyclaw Hedge Scan 掃描 Polymarket（Gamma API）
+1. Qwen 每 30 分鐘按 `volume24hr` 取 Top N Events（Gamma API `get_events`），逐一對 MarketGroup 執行 Hedge Scan；Group 內無 Tier 1/2 空間時立即 Fail-Fast 切換下一個 Group
 2. 依 Tier 判定：Tier 1（≥95%）Qwen 直接執行；Tier 2（90-95%）路由 Claude 審核；Tier 3 略過
 3. 通過審核 → Polyclaw 執行 on-chain 交易（Polygon）
 4. hermes-attestation-guardian 外部監控 Hermes 環境完整性（attestation 驗證、config drift 偵測）
@@ -120,15 +120,20 @@ Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），整
 
 ```mermaid
 flowchart TD
-    A["每 30 分鐘觸發"] --> B["Polyclaw Hedge Scan<br>掃描活躍市場"]
-    B --> C{"Tier 判定"}
-    C -->|"Tier 3 &lt; 90%"| D["略過，記錄"]
-    C -->|"Tier 2 90-95%"| E["路由至 Claude Sonnet 4.6 審核"]
-    C -->|"Tier 1 ≥ 95%"| F["Qwen 直接執行模擬交易"]
-    E --> G{"Claude 通過？"}
-    G -->|No| D
-    G -->|Yes| F
-    F --> H["記錄結果<br>勝率 / 利潤 / 手續費"]
+    A["每 30 分鐘觸發"] --> B["按 volume24hr 取 Top N Events\n(Gamma API get_events)"]
+    B --> C["取下一個 Event Group"]
+    C --> D{"Group 內市場數 ≥ 2？"}
+    D -->|"否"| C
+    D -->|"是"| E["Polyclaw Hedge Scan\n(僅分析此 Group 內市場)"]
+    E --> F{"最高 Coverage？"}
+    F -->|"< 90% Tier 3"| G["Fail-Fast：切換下一 Group"]
+    G --> C
+    F -->|"Tier 2  90-95%"| H["路由至 Claude Sonnet 4.6 審核"]
+    F -->|"Tier 1 ≥ 95%"| I["Qwen 直接執行模擬交易"]
+    H --> J{"Claude 通過？"}
+    J -->|No| K["略過，記錄"]
+    J -->|Yes| I
+    I --> L["記錄結果\n勝率 / 利潤 / 手續費"]
 ```
 
 ### Bankroll 與結算機制
@@ -174,7 +179,7 @@ flowchart TD
 
 NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果）。Polyclaw 對 NegRisk 的支援分兩層：
 
-- **識別層**：hedge_scan 將市場列表傳給 LLM（IMPLICATION_PROMPT），LLM 自然識別互斥結果間的邏輯必然性，無需專屬掃描選項
+- **識別層**：hedge_scan 將市場列表傳給 LLM（IMPLICATION_PROMPT），LLM 自然識別互斥結果間的邏輯必然性，無需專屬掃描選項；MarketGroup-based 掃描確保同一 NegRisk 事件的所有互斥結果自動被歸入同一批次，無需額外識別。
 - **執行層**：`lib/contracts.py` 已定義 `NEG_RISK_CTF_EXCHANGE` 與 `NEG_RISK_ADAPTER` 合約地址；`lib/wallet_manager.py` 授權檢查已涵蓋 NegRisk 合約
 
 可選：以 `--query "election"` 等關鍵字縮小掃描範圍，集中在特定事件類型。
@@ -246,7 +251,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 
 ## 待解決事項
 
-- [ ] `[2026-04-20]` `[deferred]` — Embedding 市場去重（Chroma + 0.8 similarity threshold）：高頻掃描下可能重複觸發同一市場，尚未有去重機制；影響 Tier 統計準確性
+- [x] `[2026-04-20]` `[resolved 2026-05-03]` — Embedding 市場去重：採用 Polymarket 原生 MarketGroup 分組替代（Top Volume Event-based 掃描）；ChromaDB 及相似度門檻方案明確否決；詳見 ADR-008
 - [x] `[2026-04-20]` `[resolved 2026-04-21]` — Kelly Python calc 整合於 `hedge scan` 輸出，無需獨立 CLI；bankroll 動態讀取（paper: state file, live: wallet balance）；詳見 ADR-006
 - [x] `[2026-04-27]` `[resolved 2026-04-28]` — Alibaba Cloud SAS 執行個體類型確定為通用型 swas.s.c2m4s50b1.linux（2c/4G），地域英國或德國；詳見 ADR-002
 - [x] `[2026-04-27]` `[resolved 2026-04-30]` — `claude-code-skill` 等效方案確認：Tier 2 Claude Sonnet 路由由 Hermes 原生 `delegate_task` 處理（`~/.hermes/config.yaml` → `delegation.model: anthropic/claude-sonnet-4-6, provider: anthropic`）；官方 `claude-code` skill 存在但用於編程任務，非本專案所需；詳見 ADR-007
@@ -274,3 +279,4 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 | [ADR-005](adr/ADR-005-composio-integration-hub.md) | Composio 作為工具整合中樞（Tavily 搜尋） |
 | [ADR-006](adr/ADR-006-position-sizing.md) | 倉位大小策略（Quarter-Kelly Python 計算） |
 | [ADR-007](adr/ADR-007-agent-framework.md) | Agent 框架選擇（Hermes Agent 取代 OpenClaw） |
+| [ADR-008](adr/ADR-008-hedge-scan-strategy.md) | Hedge Scan 市場選取與分組策略（Top Volume + MarketGroup + Fail-Fast） |
