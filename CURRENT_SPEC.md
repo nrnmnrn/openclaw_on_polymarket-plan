@@ -116,13 +116,15 @@ Kelly Criterion 由 polyclaw 內建 Python 計算（確定性，非 LLM），整
 
 **通知機制**（詳見 [ADR-009](adr/ADR-009-telegram-notifications.md)）：
 
-Hermes 以 gateway 模式運行，Telegram adapter 啟用後 `send_message` 工具原生可用。
+Hermes 以 gateway 模式運行（`sudo hermes gateway install --system` 安裝為 system service），Telegram adapter 啟用後 `send_message` 工具原生可用。通知機制分工：
 
 | 觸發事件 | 通知內容 | 實作方式 |
 |---------|---------|---------|
-| 虛擬交易成交（Paper Trading） | 市場名稱、倉位（YES/NO）、模擬金額、Quarter-Kelly 值 | Hermes agent 呼叫 `send_message` 工具 |
-| 每日結算摘要（UTC 00:00） | 當日 P&L、勝率統計、bankroll 餘額 | 確定性 Python 腳本讀 `logs/settle_check.jsonl` → Telegram Bot API |
-| 風控警報（即時） | drift 偵測異常 / 單日虧損上限觸發 / API 調用失敗 | Hermes agent 呼叫 `send_message` 工具 |
+| 虛擬交易成交（Paper Trading） | 市場名稱、倉位（YES/NO）、模擬金額、Quarter-Kelly 值 | Hermes agent 呼叫 `send_message` → **auto-delivery**（`--deliver telegram`）推送，內建重複目標偵測 |
+| 每日結算摘要（UTC 00:00） | 當日 P&L、勝率統計、bankroll 餘額 | 確定性 Python 腳本讀 `logs/settle_check.jsonl` → **`--no-agent` script-only cron**，直接呼叫 Telegram Bot API（零 LLM 成本） |
+| 風控警報（即時） | drift 偵測異常 / 單日虧損上限觸發 / API 調用失敗 | Guardian 以 **`--no-agent` 模式**執行 script-only cron，異常時直接呼叫 Telegram Bot API；agent 觸發的警報（如 `unusual market`）走 auto-delivery |
+
+純 LLM 任務若不需通知，使用 `[SILENT]` tag 抑制 delivery。
 
 ---
 
@@ -267,8 +269,8 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 - [x] `[2026-04-20]` `[resolved 2026-04-21]` — Kelly Python calc 整合於 `hedge scan` 輸出，無需獨立 CLI；bankroll 動態讀取（paper: state file, live: wallet balance）；詳見 ADR-006
 - [x] `[2026-04-27]` `[resolved 2026-04-28]` — Alibaba Cloud SAS 執行個體類型確定為通用型 swas.s.c2m4s50b1.linux（2c/4G），地域英國或德國；詳見 ADR-002
 - [x] `[2026-04-27]` `[resolved 2026-04-30]` — `claude-code-skill` 等效方案確認：Tier 2 Claude Sonnet 路由由 Hermes 原生 `delegate_task` 處理（`~/.hermes/config.yaml` → `delegation.model: anthropic/claude-sonnet-4-6, provider: anthropic`）；官方 `claude-code` skill 存在但用於編程任務，非本專案所需；詳見 ADR-007
-- [ ] `[2026-05-03]` `[detail-incomplete]` — Hermes gateway 模式具體啟動指令未確認（影響 systemd unit 配置；需查閱 Hermes 官方文件確認 gateway 模式啟動參數）
-- [ ] `[2026-05-03]` `[detail-incomplete]` — cron auto-delivery（`HERMES_CRON_AUTO_DELIVER_*`）與 agent 主動呼叫 `send_message` 的使用場景分工未明確（每日結算摘要已確定用 Python 腳本；trade 通知用 agent；但 guardian 警報的觸發路徑待確認）
+- [x] `[2026-05-03]` `[resolved 2026-05-10]` — Hermes gateway 啟動：`sudo hermes gateway install --system` 安裝為 Linux 開機自啟 system service（非 user service）；詳情見 ADR-009
+- [x] `[2026-05-03]` `[resolved 2026-05-10]` — cron 通知機制分工：Trade 通知走 `--deliver telegram` auto-delivery（含重複目標偵測）；每日結算走 `--no-agent` script-only cron（零 LLM 成本）直接呼叫 Telegram Bot API；Guardian 警報走 `--no-agent` 模式；純 LLM 任務不需通知時用 `[SILENT]` tag 抑制；詳情見 ADR-009
 
 ---
 
