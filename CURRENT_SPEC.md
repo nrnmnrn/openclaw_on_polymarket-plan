@@ -191,10 +191,18 @@ flowchart TD
 
 ### NegRisk 市場支援
 
-NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果）。Polyclaw 對 NegRisk 的支援分兩層：
+NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果）。Polyclaw 對 NegRisk 的支援分三層：
 
-- **識別層**：hedge_scan 將市場列表傳給 LLM（IMPLICATION_PROMPT），LLM 自然識別互斥結果間的邏輯必然性，無需專屬掃描選項；MarketGroup-based 掃描確保同一 NegRisk 事件的所有互斥結果自動被歸入同一批次，無需額外識別。
+- **識別層（確定性）**：直接讀取 Gamma API `negRisk` 欄位；`negRisk=true` 的市場觸發 Multi-Outcome Arbitrage 確定性掃描（`Σ asks < 1 - fees`），無需 LLM 判定互斥性。MarketGroup-based 掃描確保同一 NegRisk 事件的所有結果自動歸入同一批次。
+- **識別層（語意）**：`negRisk=false` 的跨 Group 市場才由 LLM（IMPLICATION_PROMPT）分析隱性邏輯關聯（例如總經事件之間的因果套利）。
 - **執行層**：`lib/contracts.py` 已定義 `NEG_RISK_CTF_EXCHANGE` 與 `NEG_RISK_ADAPTER` 合約地址；`lib/wallet_manager.py` 授權檢查已涵蓋 NegRisk 合約
+
+**套利策略優先序**：
+
+| 優先 | 策略 | 條件 | 備註 |
+|------|------|------|------|
+| 主 | Multi-Outcome Arbitrage | `Σ P_i(ask) < 1 - total_fees`（n ≥ 2 互斥結果） | 確定性掃描，NegRisk 市場原生支援 |
+| 次 | Binary Parity Arbitrage | `P_YES(ask) + P_NO(ask) < 1 - total_fees` | 窗口 <10s，bot 主導，極稀少；純 Taker 幾乎無利潤空間 |
 
 可選：以 `--query "election"` 等關鍵字縮小掃描範圍，集中在特定事件類型。
 
@@ -256,7 +264,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 ## 已知風險
 
 - Polymarket 升級（USDC.e → Polymarket USD）可能造成 Polyclaw 暫時不相容
-- 套利利潤薄，手續費（0.3%-2%）+ 延遲可能吃掉利潤
+- 套利利潤薄，手續費動態公式 `Fee = C × feeRate × p × (1-p)`（p=0.5 時最高：Sports ~0.75%，Politics ~1.0%，Crypto 最高 ~1.8%；Maker 免費）；延遲可能吃掉利潤
 - $150 本金短期內無法打平運行成本，需視為策略驗證投資
 - UMA oracle 治理操控風險：Polymarket 使用 UMA 作為爭議解決機制，治理攻擊（如 2025-03 烏克蘭礦產案例）可能導致結果偏離市場預期。跨平台套利需 >$0.15 spread buffer，單一平台邏輯套利風險較低
 - Leg Risk：hedge_scan 的兩腿（YES / NO）須同步執行；若一腿成交、另一腿失敗，將形成單邊曝險。Polyclaw 以 sub-5s 異步提交緩解，仍需於 log 中監控
@@ -271,6 +279,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 - [x] `[2026-04-27]` `[resolved 2026-04-30]` — `claude-code-skill` 等效方案確認：Tier 2 Claude Sonnet 路由由 Hermes 原生 `delegate_task` 處理（`~/.hermes/config.yaml` → `delegation.model: anthropic/claude-sonnet-4-6, provider: anthropic`）；官方 `claude-code` skill 存在但用於編程任務，非本專案所需；詳見 ADR-007
 - [x] `[2026-05-03]` `[resolved 2026-05-10]` — Hermes gateway 啟動：`sudo hermes gateway install --system` 安裝為 Linux 開機自啟 system service（非 user service）；詳情見 ADR-009
 - [x] `[2026-05-03]` `[resolved 2026-05-10]` — cron 通知機制分工：Trade 通知走 `--deliver telegram` auto-delivery（含重複目標偵測）；每日結算走 `--no-agent` script-only cron（零 LLM 成本）直接呼叫 Telegram Bot API；Guardian 警報走 `--no-agent` 模式；純 LLM 任務不需通知時用 `[SILENT]` tag 抑制；詳情見 ADR-009
+- [ ] `[2026-05-17]` `[deferred]` — Maker-Taker 混合執行策略（Limit Order 掛單 → WebSocket fill 監聽 → 立即 Market Order 對沖）：省一半手續費但需 WebSocket + partial fill 狀態管理，個人 MVP 複雜度過高；Paper trading 驗證後評估是否值得
 
 ---
 
@@ -280,6 +289,7 @@ NegRisk 為 Polymarket 的互斥事件機制（同一事件的多個互斥結果
 - 多鏈支援
 - 多策略並行（先驗證一個策略）
 - Liquidity Provision / Market Making（需 $5,000+ 資金，超出簡單使用範圍）
+- Kalshi 跨平台套利（台灣為受限司法管轄區，法律限制）
 
 ---
 

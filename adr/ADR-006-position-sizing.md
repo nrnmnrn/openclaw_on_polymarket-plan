@@ -23,9 +23,19 @@ m = 1.0 - C - fees           # 預期利潤（hedge 成功時回收 ≈ $1）
 C = portfolio["total_cost"]  # 組合入場成本
 p = portfolio["coverage"]    # 直接使用 coverage 作為成功機率
 q = 1 - p
-fees = C × 1%                # Polymarket taker fee 估算
+fees = C × 1%                # Polymarket taker fee 保守估算（見下方說明）
 
 position_usd = f* × 0.25 × bankroll
+```
+
+**Taker Fee 說明**：`fees = C × 1%` 為保守估算。實際動態公式：`Fee = C × feeRate × p × (1-p)`，p=0.5 時最高（Sports ~0.75%，Politics ~1.0%，Crypto 最高 ~1.8%）；p 接近 0 或 1 時費用趨近於零。Paper trading 階段沿用靜態 1% 作為 conservative buffer；Maker 訂單免費。
+
+**Binary 市場簡化版**（等價公式，買入 YES 時更直觀）：
+
+```
+f* = (p - m) / (1 - m)
+  m = 市場當前買入價（ask）
+  p = coverage（hedge scan 輸出，代入成功概率）
 ```
 
 ### 參數來源
@@ -109,3 +119,4 @@ Audit log 寫入 `logs/kelly_audit.jsonl`，不定期清理。
 | 2026-04-20 | 初版建立 | 確立 Quarter-Kelly Python 為倉位計算標準，取代固定倉位與 LLM 計算方案 |
 | 2026-04-21 | 精簡設計：移除獨立 CLI、YAML config、Tier→p 映射、override flags；改為整合於 hedge scan 輸出；bankroll 動態讀取 | 減少元件數量，符合個人維運原則；bankroll 動態化確保資金成長後自動調整倉位 |
 | 2026-04-21 | 新增 bankroll 狀態管理機制交叉引用 | 連結至詳細 spec，避免文件孤立 |
+| 2026-05-17 | 補充動態 Taker Fee 公式說明 + Binary 市場簡化 Kelly 公式 | 澄清 1% 為 conservative buffer；簡化版 `(p-m)/(1-m)` 對 binary 市場更直觀 |
